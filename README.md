@@ -1,11 +1,11 @@
-# EPCPyYes PHP — EPCIS 2.0 Library
+# epcis-parser-php — EPCIS 2.0 Library
 
-`serial-lab/epcpyyes-php` is a PHP 8.1+ library for generating and parsing GS1 EPCIS 2.0 documents. It produces schema-valid XML and JSON for all five EPCIS event types and covers the full EPCIS 2.0 feature set: `sensorElementList`, `persistentDisposition`, `AssociationEvent`, and top-level `ilmd`.
+`rpacker/epcis-parser-php` is a PHP 8.1+ library for generating and parsing GS1 EPCIS 2.0 documents. It produces schema-valid XML and JSON for all five EPCIS event types and covers the full EPCIS 2.0 feature set: `sensorElementList`, `persistentDisposition`, `AssociationEvent`, and top-level `ilmd`.
 
 ## Installation
 
 ```bash
-composer require serial-lab/epcpyyes-php
+composer require rpacker/epcis-parser-php
 ```
 
 No external PHP extensions required beyond the PHP standard library.
@@ -21,11 +21,11 @@ All events share a common base. Named constructor parameters let you set only wh
 Used for commissioning, shipping, receiving, destroying individual items.
 
 ```php
-use SerialLab\EPCPyYes\Events\ObjectEvent;
-use SerialLab\EPCPyYes\Events\InstanceLotMasterDataAttribute;
-use SerialLab\EPCPyYes\Events\QuantityElement;
-use SerialLab\EPCPyYes\CBV\BusinessSteps;
-use SerialLab\EPCPyYes\CBV\Disposition;
+use Rpacker\EpcisParser\Events\ObjectEvent;
+use Rpacker\EpcisParser\Events\InstanceLotMasterDataAttribute;
+use Rpacker\EpcisParser\Events\QuantityElement;
+use Rpacker\EpcisParser\CBV\BusinessSteps;
+use Rpacker\EpcisParser\CBV\Disposition;
 
 // Commissioning with ILMD
 $event = new ObjectEvent(
@@ -60,8 +60,8 @@ $shipping = new ObjectEvent(
 Used when items are packed into a container (case, pallet).
 
 ```php
-use SerialLab\EPCPyYes\Events\AggregationEvent;
-use SerialLab\EPCPyYes\Events\Action;
+use Rpacker\EpcisParser\Events\AggregationEvent;
+use Rpacker\EpcisParser\Events\Action;
 
 $event = new AggregationEvent(
     action:     Action::Add,
@@ -79,7 +79,7 @@ $event = new AggregationEvent(
 EPCIS 2.0 — associates items (e.g., drug + patient wristband) without a parent/child hierarchy.
 
 ```php
-use SerialLab\EPCPyYes\Events\AssociationEvent;
+use Rpacker\EpcisParser\Events\AssociationEvent;
 
 $event = new AssociationEvent(
     action:    Action::Add,
@@ -94,9 +94,9 @@ $event = new AssociationEvent(
 Used when items are transferred with a business transaction (purchase order, invoice).
 
 ```php
-use SerialLab\EPCPyYes\Events\TransactionEvent;
-use SerialLab\EPCPyYes\Events\BusinessTransaction;
-use SerialLab\EPCPyYes\CBV\BusinessTransactionType;
+use Rpacker\EpcisParser\Events\TransactionEvent;
+use Rpacker\EpcisParser\Events\BusinessTransaction;
+use Rpacker\EpcisParser\CBV\BusinessTransactionType;
 
 $event = new TransactionEvent(
     action:   Action::Observe,
@@ -116,7 +116,7 @@ $event = new TransactionEvent(
 Used when inputs are transformed into outputs (e.g., repackaging).
 
 ```php
-use SerialLab\EPCPyYes\Events\TransformationEvent;
+use Rpacker\EpcisParser\Events\TransformationEvent;
 
 $event = new TransformationEvent(
     bizStep:    BusinessSteps::Packing,
@@ -137,7 +137,7 @@ $event = new TransformationEvent(
 `EPCISDocument` wraps one or more events into a schema-valid EPCIS 2.0 XML envelope.
 
 ```php
-use SerialLab\EPCPyYes\Documents\EPCISDocument;
+use Rpacker\EpcisParser\Documents\EPCISDocument;
 
 $doc = new EPCISDocument([$commissioningEvent, $shippingEvent]);
 
@@ -158,7 +158,7 @@ The generated XML uses `xmlns:epcis="urn:epcglobal:epcis:xsd:2"` and `schemaVers
 `EPCISParser` accepts both EPCIS 1.2 and 2.0 documents. It uses namespace-agnostic XPath so it handles non-standard prefixes like the Cardinal Health `ns3:` format.
 
 ```php
-use SerialLab\EPCPyYes\Parser\EPCISParser;
+use Rpacker\EpcisParser\Parser\EPCISParser;
 
 $parser = new EPCISParser($xmlString);
 $parser->parse();
@@ -188,7 +188,7 @@ foreach ($parser->events as $event) {
 `EpcHelper` builds GS1 EPC URNs without requiring GS1 membership lookups.
 
 ```php
-use SerialLab\EPCPyYes\Helpers\EpcHelper;
+use Rpacker\EpcisParser\Helpers\EpcHelper;
 
 // From parts (companyPrefix + indicator + itemReference must total 13 digits)
 $urn = EpcHelper::gtinToUrn('030003', '0', '029328', '100011869390');
@@ -223,10 +223,10 @@ $sgln = EpcHelper::gln13DataToSglnUrn('0614141', '00000', '0');
 All GS1 Core Business Vocabulary values are available as PHP 8.1 backed string enums. Pass them directly to event constructors — events also accept raw URN strings.
 
 ```php
-use SerialLab\EPCPyYes\CBV\BusinessSteps;
-use SerialLab\EPCPyYes\CBV\Disposition;
-use SerialLab\EPCPyYes\CBV\SourceDestinationTypes;
-use SerialLab\EPCPyYes\CBV\BusinessTransactionType;
+use Rpacker\EpcisParser\CBV\BusinessSteps;
+use Rpacker\EpcisParser\CBV\Disposition;
+use Rpacker\EpcisParser\CBV\SourceDestinationTypes;
+use Rpacker\EpcisParser\CBV\BusinessTransactionType;
 
 BusinessSteps::Commissioning->value;  // 'urn:epcglobal:cbv:bizstep:commissioning'
 BusinessSteps::Shipping->value;       // 'urn:epcglobal:cbv:bizstep:shipping'
@@ -255,9 +255,9 @@ BusinessTransactionType::Desadv->value; // 'urn:epcglobal:cbv:btt:desadv'
 Attach IoT/sensor readings (temperature, humidity) to any event.
 
 ```php
-use SerialLab\EPCPyYes\Events\SensorElement;
-use SerialLab\EPCPyYes\Events\SensorMetadata;
-use SerialLab\EPCPyYes\Events\SensorReport;
+use Rpacker\EpcisParser\Events\SensorElement;
+use Rpacker\EpcisParser\Events\SensorMetadata;
+use Rpacker\EpcisParser\Events\SensorReport;
 
 $sensor = new SensorElement(
     metadata: new SensorMetadata(
@@ -281,7 +281,7 @@ $event = new ObjectEvent(
 EPCIS 2.0 — set/unset disposition flags that persist across events.
 
 ```php
-use SerialLab\EPCPyYes\Events\PersistentDisposition;
+use Rpacker\EpcisParser\Events\PersistentDisposition;
 
 $event = new ObjectEvent(
     bizStep:              BusinessSteps::HoldRelease,
@@ -297,9 +297,8 @@ $event = new ObjectEvent(
 ## Running Tests
 
 ```bash
-cd PHP
 composer install
-./vendor/bin/phpunit
+vendor/bin/phpunit
 ```
 
 33 tests, covering all five event types, the parser, and all EPC helper methods.

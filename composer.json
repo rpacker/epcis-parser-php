@@ -3,7 +3,6 @@
   "description": "GS1 EPCIS 2.0 and 1.2 event generation and parsing library for PHP",
   "type": "library",
   "license": "AGPL-3.0",
-  "version": "1.1.0",
   "require": {
     "php": ">=8.1"
   },

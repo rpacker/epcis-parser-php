@@ -1,6 +1,6 @@
-# epcis-parser-php — EPCIS 2.0 Library
+# epcis-parser-php — EPCIS 2.0 / 1.2 Library
 
-`rpacker/epcis-parser-php` is a PHP 8.1+ library for generating and parsing GS1 EPCIS 2.0 documents. It produces schema-valid XML and JSON for all five EPCIS event types and covers the full EPCIS 2.0 feature set: `sensorElementList`, `persistentDisposition`, `AssociationEvent`, and top-level `ilmd`.
+`rpacker/epcis-parser-php` is a PHP 8.1+ library for generating and parsing GS1 EPCIS 2.0 documents, and for writing EPCIS 1.2 (with SBDH, master data and the GS1 US DSCSA transaction statement) for trading partners that still exchange 1.2. It produces schema-valid XML and JSON for all five EPCIS event types and covers the full EPCIS 2.0 feature set: `sensorElementList`, `persistentDisposition`, `AssociationEvent`, and top-level `ilmd`.
 
 ## Installation
 
@@ -153,6 +153,58 @@ The generated XML uses `xmlns:epcis="urn:epcglobal:epcis:xsd:2"` and `schemaVers
 
 ---
 
+## Building an EPCIS 1.2 Document
+
+Most US DSCSA trading partners still exchange EPCIS 1.2. `EPCIS12Document` renders the same event objects as 1.2 XML (`urn:epcglobal:epcis:xsd:1`, `schemaVersion="1.2"`), with an optional header carrying the SBDH, master data, and industry header elements such as the GS1 US Healthcare DSCSA transaction statement. Events are written in the order given.
+
+```php
+use Rpacker\EpcisParser\CBV\VocabularyType;
+use Rpacker\EpcisParser\Documents\EPCIS12Document;
+use Rpacker\EpcisParser\Healthcare\DscsaTransactionStatement;
+use Rpacker\EpcisParser\MasterData\Vocabulary;
+use Rpacker\EpcisParser\MasterData\VocabularyElement;
+use Rpacker\EpcisParser\SBDH\DocumentIdentification;
+use Rpacker\EpcisParser\SBDH\Partner;
+use Rpacker\EpcisParser\SBDH\StandardBusinessDocumentHeader;
+
+$xml = (new EPCIS12Document(
+    events: [$shippingEvent],
+    sbdh: new StandardBusinessDocumentHeader(
+        sender:    new Partner('Sender', 'urn:epc:id:sgln:0096295.00000.0', 'SGLN'),
+        receivers: [new Partner('Receiver', 'urn:epc:id:sgln:110009452568..0', 'SGLN')],
+        // InstanceIdentifier defaults to a random urn:uuid, CreationDateAndTime to the document's
+        documentIdentification: new DocumentIdentification(),
+    ),
+    vocabularies: [
+        new Vocabulary(VocabularyType::EpcClass, [
+            VocabularyElement::cbv('urn:epc:idpat:sgtin:0360505.061326.*', [
+                'additionalTradeItemIdentificationTypeCode' => 'FDA_NDC_11',
+                'additionalTradeItemIdentification'         => '60505613206',
+                'regulatedProductName'                      => 'OXALIPLATIN INJECTION',
+            ]),
+        ]),
+        new Vocabulary(VocabularyType::Location, [
+            VocabularyElement::cbv('urn:epc:id:sgln:110009452568..0', ['name' => 'ADVANCED RX PHARMACY 060', 'city' => 'NASHVILLE']),
+        ]),
+    ],
+    headerElements: [
+        new DscsaTransactionStatement('Seller has complied with each applicable subsection of FDCA Sec. 581(27)(A)-(G).'),
+    ],
+))->render();
+```
+
+What differs from 2.0, handled for you:
+
+- Fields added after EPCIS 1.0 go under each event's `<extension>` (`quantityList`, `sourceList`, `destinationList`, `ilmd`, `childQuantityList`); `eventID` and `errorDeclaration` go under `<baseExtension>`.
+- `TransformationEvent` is wrapped in `<extension>` inside the `EventList`.
+- Master data sits in `<EPCISHeader><extension><EPCISMasterData>`.
+
+EPCIS 2.0-only content — `AssociationEvent`, `sensorElementList`, `persistentDisposition` — has no 1.2 form, so rendering it throws `InvalidArgumentException` instead of silently dropping it. So does a `TransactionEvent` with no business transaction, which 1.2 requires.
+
+Custom header content: implement `Documents\HeaderElement` (`render()` returns the element, `namespaces()` the prefixes to declare on the root).
+
+---
+
 ## Parsing EPCIS XML
 
 `EPCISParser` accepts both EPCIS 1.2 and 2.0 documents. It uses namespace-agnostic XPath so it handles non-standard prefixes like the Cardinal Health `ns3:` format.
@@ -197,6 +249,11 @@ $urn = EpcHelper::gtinToUrn('030003', '0', '029328', '100011869390');
 // From a 14-digit GTIN (indicator + company+item + check)
 $urn = EpcHelper::gtin14ToSgtinUrn('00300030293282', '100011869390', companyPrefixLength: 6);
 // → urn:epc:id:sgtin:030003.0029328.100011869390
+```
+
+The company prefix length is not encoded in a GTIN — it varies by company (US drug GTINs embed NDC labeler codes of different lengths: `030003` vs `0360505`). Take it from your product master data; guessing a fixed length yields well-formed URNs that match nothing your partners recorded. Serial numbers are percent-encoded per the GS1 Tag Data Standard (`/` → `%2F`, `&` → `%26`, …).
+
+```php
 
 // Generate URNs for a serial range
 foreach (EpcHelper::gtinUrnGenerator('030003', '0', '029328', range(1, 100)) as $urn) {
@@ -211,6 +268,23 @@ foreach (EpcHelper::ssccUrnGenerator('030003', [1, 2, 3]) as $sscc) {
 // SGLN (location)
 $sgln = EpcHelper::gln13DataToSglnUrn('0614141', '00000', '0');
 // → urn:epc:id:sgln:0614141.00000.0
+
+// SGTIN class pattern (EPCClass master data id)
+EpcHelper::gtin14ToSgtinPattern('00360505613267', 7);
+// → urn:epc:idpat:sgtin:0360505.061326.*
+
+// SSCC from a scanned 18-digit SSCC
+EpcHelper::sscc18ToSsccUrn('003605050000001231', 7);
+// → urn:epc:id:sscc:0360505.0000000123
+
+// Validation: GS1 check digits
+EpcHelper::normalizeGtin14('300030293282');       // → '00300030293282' (null if invalid)
+EpcHelper::isValidSscc18('003605050000001231');    // → true
+EpcHelper::checkDigit('0030003029328');            // → 2
+
+// SGLN → company prefix / GLN-13 (with its real check digit, not the ".0" extension)
+EpcHelper::sglnCompanyPrefix('urn:epc:id:sgln:0096295.00292.0'); // → '0096295'
+EpcHelper::sglnToGln13('urn:epc:id:sgln:0096295.00292.0');       // → '0096295002928'
 
 // Current UTC time
 [$time, $offset] = EpcHelper::getCurrentUtcTimeAndOffset();
@@ -301,4 +375,4 @@ composer install
 vendor/bin/phpunit
 ```
 
-33 tests, covering all five event types, the parser, and all EPC helper methods.
+Covers all five event types, EPCIS 2.0 and 1.2 rendering, the parser, and all EPC helper methods.

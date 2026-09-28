@@ -209,6 +209,8 @@ Custom header content: implement `Documents\HeaderElement` (`render()` returns t
 
 `EPCISParser` accepts both EPCIS 1.2 and 2.0 documents. It uses namespace-agnostic XPath so it handles non-standard prefixes like the Cardinal Health `ns3:` format.
 
+The constructor takes the document's XML itself — never a path — and throws `InvalidArgumentException` if it isn't well-formed (a UTF-8 byte-order mark is fine). To read a file, use `EPCISParser::fromFile($path)`. Before 1.2.0 the constructor guessed: input not starting with `<` was loaded as a path, so a document with a byte-order mark parsed to nothing, and untrusted content naming a server file got that file read. Parsing never touches the network (`LIBXML_NONET`).
+
 ```php
 use Rpacker\EpcisParser\Parser\EPCISParser;
 
